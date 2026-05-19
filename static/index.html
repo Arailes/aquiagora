@@ -131,12 +131,44 @@
         }
 
         async function fecharChamada() {
-            const res = await fetch('/api/fechar', { method: 'POST' });
-            const data = await res.json();
-            mostrarLog(data.mensagem);
-            checarStatus();
-        }
+    const materiaAtual = document.getElementById('materiaNome').value || "Disciplina não informada";
+    
+    try {
+        const res = await fetch('/api/fechar', { method: 'POST' });
+        const data = await res.json();
+        
+        mostrarLog(data.mensagem);
         checarStatus();
-    </script>
-</body>
-</html>
+
+        // 1. Garante que 'alunos' seja uma lista válida, mesmo que venha vazia do Go
+        const listaAlunos = Array.isArray(data.alunos) ? data.alunos : [];
+        
+        // 2. Preenche os dados do cabeçalho
+        document.getElementById('printMateria').innerText = `Disciplina: ${materiaAtual}`;
+        document.getElementById('printData').innerText = `Data: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`;
+        document.getElementById('printTotal').innerText = listaAlunos.length;
+        
+        // 3. Preenche a tabela HTML
+        const tbody = document.getElementById('printListaAlunos');
+        tbody.innerHTML = ""; // Limpa a tabela
+        
+        if (listaAlunos.length === 0) {
+            // Se nenhum aluno respondeu, exibe uma mensagem na tabela
+            tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; padding: 20px;">Nenhum aluno registrou presença.</td></tr>`;
+        } else {
+            // Se tem alunos, ordena em ordem alfabética e lista
+            listaAlunos.sort().forEach((nome, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${index + 1}</td><td>${nome}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 4. Chama a impressão de forma direta (evita bloqueios de pop-up no iOS/Android)
+        // O navegador usará o CSS @media print que configuramos para esconder o site e mostrar só a folha.
+        window.print();
+
+    } catch (error) {
+        mostrarLog("Erro ao gerar relatório: " + error.message, true);
+    }
+}
