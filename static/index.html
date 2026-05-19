@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fluxsus - Lista de Chamada Georreferenciada</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col justify-between">
+
+    <header class="bg-blue-600 text-white shadow-md p-4">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold tracking-tight">Fluxsus Chamada</h1>
+            <span id="statusBadge" class="bg-red-500 text-xs px-2 py-1 rounded-full font-semibold animate-pulse">Sem aula ativa</span>
+        </div>
+    </header>
+
+    <main class="max-w-md w-full mx-auto p-4 flex-grow">
+        <!-- Navegação de Abas -->
+        <div class="flex bg-slate-200 p-1 rounded-lg mb-6">
+            <button id="tabAlunoBtn" class="flex-1 py-2 text-center rounded-md font-medium bg-white text-blue-600 shadow-xs" onclick="switchTab('aluno')">Aluno</button>
+            <button id="tabProfBtn" class="flex-1 py-2 text-center rounded-md font-medium text-slate-600" onclick="switchTab('prof')">Professor</button>
+        </div>
+
+        <!-- VISÃO: ALUNO -->
+        <div id="viewAluno" class="space-y-4">
+            <div class="bg-white p-6 rounded-xl shadow-xs border border-slate-100">
+                <h2 class="text-lg font-bold mb-4 text-slate-700">Registrar Minha Presença</h2>
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-slate-600">Seu Nome Completo:</label>
+                    <input type="text" id="alunoNome" class="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: José Arailes">
+                    <button onclick="registrarPresenca()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                        Validar Presença (GPS + Wi-Fi)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VISÃO: PROFESSOR -->
+        <div id="viewProf" class="space-y-4 hidden">
+            <div class="bg-white p-6 rounded-xl shadow-xs border border-slate-100">
+                <h2 class="text-lg font-bold mb-4 text-slate-700">Painel do Professor</h2>
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-slate-600">Nome da Disciplina:</label>
+                    <input type="text" id="materiaNome" class="w-full p-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Farmacologia Médica">
+                    <div class="flex gap-2">
+                        <button onclick="abrirChamada()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                            Iniciar Chamada
+                        </button>
+                        <button onclick="fecharChamada()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                            Encerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Caixa de Log/Resultado -->
+        <div id="logBox" class="mt-4 p-4 rounded-lg border hidden"></div>
+    </main>
+
+    <footer class="text-center p-4 text-xs text-slate-400 border-t border-slate-100 bg-white">
+        Fluxsus Decision Support &copy; 2026
+    </footer>
+
+    <script>
+        // Opções padrão para forçar o hardware a ligar o GPS e buscar precisão máxima
+        const geoOptions = { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 };
+
+        function switchTab(role) {
+            const isAluno = role === 'aluno';
+            document.getElementById('viewAluno').classList.toggle('hidden', !isAluno);
+            document.getElementById('viewProf').classList.toggle('hidden', isAluno);
+            document.getElementById('tabAlunoBtn').className = isAluno ? "flex-1 py-2 text-center rounded-md font-medium bg-white text-blue-600 shadow-xs" : "flex-1 py-2 text-center rounded-md font-medium text-slate-600";
+            document.getElementById('tabProfBtn').className = !isAluno ? "flex-1 py-2 text-center rounded-md font-medium bg-white text-blue-600 shadow-xs" : "flex-1 py-2 text-center rounded-md font-medium text-slate-600";
+        }
+
+        async function checarStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                const badge = document.getElementById('statusBadge');
+                if(data.ativa) {
+                    badge.innerText = `Aula: ${data.materia}`;
+                    badge.className = "bg-green-500 text-xs px-2 py-1 rounded-full font-semibold text-white animate-pulse";
+                } else {
+                    badge.innerText = "Sem aula ativa";
+                    badge.className = "bg-red-500 text-xs px-2 py-1 rounded-full font-semibold text-white";
+                }
+            } catch(e) {}
+        }
+        setInterval(checarStatus, 5000); // Atualiza o status a cada 5 segundos
+
+        function mostrarLog(msg, erro = false) {
+            const box = document.getElementById('logBox');
+            box.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'border-red-200', 'bg-green-50', 'text-green-700', 'border-green-200');
+            box.classList.add(erro ? 'bg-red-50' : 'bg-green-50', erro ? 'text-red-700' : 'text-green-700', erro ? 'border-red-200' : 'border-green-200');
+            box.innerText = msg;
+        }
+
+        function abrirChamada() {
+            const materia = document.getElementById('materiaNome').value.trim();
+            if(!materia) return alert("Digite o nome da matéria.");
+
+            mostrarLog("Obtendo localização do professor...");
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const payload = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, materia: materia };
+                const res = await fetch('/api/abrir', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                const data = await res.json();
+                mostrarLog(data.mensagem);
+                checarStatus();
+            }, (err) => mostrarLog(`Erro de GPS: ${err.message}. Ative a localização.`, true), geoOptions);
+        }
+
+        function registrarPresenca() {
+            const nome = document.getElementById('alunoNome').value.trim();
+            if(!nome) return alert("Digite seu nome completo.");
+
+            mostrarLog("Capturando sua geolocalização...");
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const payload = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy, aluno_nome: nome };
+                const res = await fetch('/api/responder', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                const data = await res.json();
+                
+                if (res.status !== 200) {
+                    mostrarLog(data.detail || "Erro desconhecido.", true);
+                } else {
+                    mostrarLog(data.mensagem);
+                }
+            }, (err) => mostrarLog(`Erro de GPS: ${err.message}. Garanta que deu permissão ao navegador.`, true), geoOptions);
+        }
+
+        async function fecharChamada() {
+            const res = await fetch('/api/fechar', { method: 'POST' });
+            const data = await res.json();
+            mostrarLog(data.mensagem);
+            checarStatus();
+        }
+        checarStatus();
+    </script>
+</body>
+</html>
